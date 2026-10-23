@@ -7,6 +7,5 @@ captures/
 .cxx/
 *.keystore
 *.jks
-CLAUDE.md
 .claude/settings.local.json
 .kotlin/

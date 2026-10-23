@@ -63,6 +63,21 @@ A revoked terminal wipes its key and state and asks again from step 1.
   Famoco device owner setup can replace this with a real screen off.
 - **Audio commands expire after five minutes** on the server, so a terminal that comes back late never plays stale audio.
 
+## Emergency alerts
+
+`emergency.set` replaces the whole screen with the door code, chevrons pointing at the emblem of the emergency,
+a title and the procedure. `emergency.clear` restores the door screen. Decisions:
+
+- **The alarm is synthesised on the device** (`AlarmSynth`), one loop per kind, played on the alarm stream through
+  `AudioTrack`. No file to download, so it works offline and starts at once. The alarm stream is pushed to its
+  maximum and the level is applied on the track, so a low system volume cannot silence a real alert.
+- **A real alert ignores the volume setting and quiet hours.** A power cut is a soft chime (35%). A **test** shows a
+  TEST tag, plays at the volume chosen in the console and stays silent in quiet hours.
+- **It survives restarts and outages.** The emergency is persisted; after a reboot the alarm resumes. On reconnect the
+  full desired state decides: no emergency in it means the alert ended, even if the clear was missed.
+- **It overrides night sleep** and sets the brightness to full.
+- A clear for an alert that a newer one replaced does not end the newer one.
+
 ## Tests
 
 `./gradlew :core:test` runs the unit tests (RFC 5869 HKDF vector, channel tampering, replay and reflection,
@@ -93,5 +108,7 @@ night sleep (black screen, the device reports `screen: sleep`) and revocation (k
 
 ## Not covered yet
 
-Not tried on a real Famoco terminal. Typing the server key by hand is tedious on a device: a QR code or a
-managed configuration would be better. No boot receiver: the app is meant to be set as the home app of the terminal.
+Not tried on a real Famoco terminal, and the alarm loops have not been judged on a real speaker (on the emulator a
+started `USAGE_ALARM` track was confirmed, and the loops are tested for loudness and a seamless loop point). Typing the
+server key by hand is tedious on a device: a QR code or a managed configuration would be better. No boot receiver: the
+app is meant to be set as the home app of the terminal.

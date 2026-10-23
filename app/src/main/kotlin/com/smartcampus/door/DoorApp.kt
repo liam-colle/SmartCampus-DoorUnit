@@ -109,7 +109,7 @@ class DoorApp : Application() {
         val identity: DeviceIdentity = AndroidKeystoreIdentity.loadOrCreate()
         val deviceId = checkNotNull(config.deviceId) { "an enrolled device has an id" }
         val assets = AssetDownloader(config.serverUrl, deviceId, identity, File(cacheDir, "audio"))
-        val controller = DoorController(storage, assets, MediaPlayerAudio(), scope)
+        val controller = DoorController(storage, assets, MediaPlayerAudio(), scope, AudioTrackAlarm(this))
         val serverKey = parseServerKey(Base64.getDecoder().decode(config.serverPublicKey))
         _phase.value = AppPhase.Running(controller)
 

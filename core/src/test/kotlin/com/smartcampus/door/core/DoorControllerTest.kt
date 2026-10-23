@@ -64,7 +64,7 @@ class DoorControllerTest {
         RecordingSink().also { controller.onEvent(LinkEvent.Connected(it)) }
 
     private fun controller(scope: TestScope, assets: AssetSource = FakeAssets(), player: AudioPlayer = FakePlayer(), now: Long = noon) =
-        DoorController(FileStorage(dir), assets, player, scope, ZoneOffset.UTC) { now }
+        DoorController(FileStorage(dir), assets, player, scope, zone = ZoneOffset.UTC) { now }
 
     @Test
     fun applies_a_status_acknowledges_it_and_reports() = runTest {

@@ -80,7 +80,13 @@ fun DoorScreen(controller: DoorController) {
     val now = rememberNow()
     val asleep = door.isAsleep(now, zone)
 
-    DimWhileAsleep(asleep)
+    // An emergency overrides night sleep: the panel wakes at full brightness and shows nothing else.
+    val emergency = door.emergency
+    DimWhileAsleep(asleep && emergency == null, bright = emergency != null)
+    if (emergency != null) {
+        EmergencyScreen(door.room?.code, emergency)
+        return
+    }
     if (asleep) {
         // Night sleep: black, with the backlight at its lowest, still connected so an urgent announcement can wake it.
         Box(Modifier.fillMaxSize().background(Color.Black))
@@ -91,12 +97,16 @@ fun DoorScreen(controller: DoorController) {
 
 /** There is no API to switch the panel off without device admin rights, so the brightness goes to the minimum. */
 @Composable
-private fun DimWhileAsleep(asleep: Boolean) {
+private fun DimWhileAsleep(asleep: Boolean, bright: Boolean) {
     val activity = LocalContext.current as? Activity
     SideEffect {
         activity?.window?.let { window ->
             window.attributes = window.attributes.apply {
-                screenBrightness = if (asleep) 0.01f else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                screenBrightness = when {
+                    bright -> 1f
+                    asleep -> 0.01f
+                    else -> WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                }
             }
         }
     }
