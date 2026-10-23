@@ -114,4 +114,20 @@ class CryptoTest {
         assertTrue(ULID_REGEX.matches(a))
         assertTrue(a < b)
     }
+
+    @Test
+    fun the_written_out_curve_matches_the_one_the_platform_calls_secp256r1() {
+        // The domain parameters are constants (the platform lookup is missing on Android 6): they must be P-256.
+        val platform = java.security.AlgorithmParameters.getInstance("EC").run {
+            init(java.security.spec.ECGenParameterSpec("secp256r1"))
+            getParameterSpec(java.security.spec.ECParameterSpec::class.java)
+        }
+        val key = P256.generateEphemeral().public as java.security.interfaces.ECPublicKey
+        assertEquals(platform.curve, key.params.curve)
+        assertEquals(platform.generator, key.params.generator)
+        assertEquals(platform.order, key.params.order)
+        // And a point survives the round trip through our own parameters.
+        val decoded = P256.decodePoint(P256.encodePoint(key)) as java.security.interfaces.ECPublicKey
+        assertEquals(key.w, decoded.w)
+    }
 }

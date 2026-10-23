@@ -2,6 +2,7 @@ package com.smartcampus.door.core.net
 
 import com.smartcampus.door.core.crypto.DeviceIdentity
 import com.smartcampus.door.core.crypto.fingerprintOf
+import com.smartcampus.door.core.util.B64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -17,7 +18,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
-import java.util.Base64
 
 data class EnrollmentTicket(val deviceId: String, val fingerprint: String)
 
@@ -29,7 +29,7 @@ class EnrollmentClient(private val baseUrl: String, private val client: OkHttpCl
 
     suspend fun request(identity: DeviceIdentity, type: String, name: String): EnrollmentTicket = withContext(Dispatchers.IO) {
         val body = buildJsonObject {
-            put("publicKey", Base64.getEncoder().encodeToString(identity.publicKeySpki))
+            put("publicKey", B64.encode(identity.publicKeySpki))
             put("type", type)
             if (name.isNotBlank()) put("name", name)
         }.toString().toRequestBody("application/json".toMediaType())

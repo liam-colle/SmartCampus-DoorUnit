@@ -1,12 +1,12 @@
 package com.smartcampus.door.core.crypto
 
+import com.smartcampus.door.core.util.B64
 import java.nio.ByteBuffer
 import java.security.KeyPair
 import java.security.MessageDigest
 import java.security.PublicKey
 import java.security.SecureRandom
 import java.security.Signature
-import java.util.Base64
 
 class HandshakeException(message: String) : Exception(message)
 
@@ -81,11 +81,11 @@ class DeviceHandshake(
                 .map { ByteBuffer.allocate(4).putInt(it.size).array() + it }
                 .reduce(ByteArray::plus)
 
-        fun b64(bytes: ByteArray): String = Base64.getEncoder().encodeToString(bytes)
+        fun b64(bytes: ByteArray): String = B64.encode(bytes)
 
         fun unb64(text: String): ByteArray =
             try {
-                Base64.getDecoder().decode(text)
+                B64.decode(text)
             } catch (e: IllegalArgumentException) {
                 throw HandshakeException("malformed base64 in the handshake")
             }

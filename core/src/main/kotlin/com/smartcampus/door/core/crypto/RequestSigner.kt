@@ -1,6 +1,7 @@
 package com.smartcampus.door.core.crypto
 
-import java.util.Base64
+import com.smartcampus.door.core.util.B64
+
 
 /** Headers of a request signed with the device key (asset downloads). */
 data class SignedHeaders(val deviceId: String, val timestamp: String, val signature: String)
@@ -13,5 +14,5 @@ data class SignedHeaders(val deviceId: String, val timestamp: String, val signat
 fun signRequest(identity: DeviceIdentity, deviceId: String, method: String, path: String, nowMs: Long): SignedHeaders {
     val timestamp = nowMs.toString()
     val message = "smartcampus/v1/request\u0000${method.uppercase()}\n$path\n$timestamp".toByteArray()
-    return SignedHeaders(deviceId, timestamp, Base64.getEncoder().encodeToString(identity.sign(message)))
+    return SignedHeaders(deviceId, timestamp, B64.encode(identity.sign(message)))
 }
