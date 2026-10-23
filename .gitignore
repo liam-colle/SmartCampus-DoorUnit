@@ -1,0 +1,11 @@
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+captures/
+.cxx/
+*.keystore
+*.jks
+CLAUDE.md
+.claude/settings.local.json
