@@ -5,6 +5,7 @@ import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
@@ -113,15 +114,18 @@ private fun DoorContent(door: DoorState, online: Boolean, now: Long) {
     val accent = parseColor(door.config.accentColor)
     val announcements = if (door.config.show.announcements) door.visibleAnnouncements(now) else emptyList()
 
-    Box(Modifier.fillMaxSize().background(palette.background).padding(32.dp)) {
-        when (door.config.layout) {
-            "split" -> Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(palette.background).padding(32.dp)) {
+        // Symptom: in portrait the split layout gave each column half of a narrow screen and the status label
+        // broke in the middle of a word. Fix: side by side only on a landscape screen, stacked otherwise.
+        val landscape = maxWidth > maxHeight
+        when {
+            door.config.layout == "split" && landscape -> Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 RoomBlock(door, now, palette, accent, compact = false, modifier = Modifier.weight(1f).fillMaxHeight())
-                Column(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(20.dp)).background(palette.surface).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Announcements", color = palette.muted, fontSize = 18.sp)
-                    if (announcements.isEmpty()) Text("Nothing to show.", color = palette.muted, fontSize = 20.sp)
-                    announcements.take(3).forEach { AnnouncementBanner(it, palette, accent) }
-                }
+                AnnouncementPanel(announcements, palette, accent, Modifier.weight(1f).fillMaxHeight())
+            }
+            door.config.layout == "split" -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                RoomBlock(door, now, palette, accent, compact = false, modifier = Modifier.weight(3f).fillMaxWidth())
+                AnnouncementPanel(announcements, palette, accent, Modifier.weight(2f).fillMaxWidth())
             }
             else -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 RoomBlock(door, now, palette, accent, compact = door.config.layout == "compact", modifier = Modifier.weight(1f).fillMaxWidth())
@@ -129,6 +133,15 @@ private fun DoorContent(door: DoorState, online: Boolean, now: Long) {
             }
         }
         if (!online) OfflineBadge(Modifier.align(Alignment.TopEnd))
+    }
+}
+
+@Composable
+private fun AnnouncementPanel(announcements: List<Announcement>, palette: Palette, accent: Color, modifier: Modifier) {
+    Column(modifier.clip(RoundedCornerShape(20.dp)).background(palette.surface).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Announcements", color = palette.muted, fontSize = 18.sp)
+        if (announcements.isEmpty()) Text("Nothing to show.", color = palette.muted, fontSize = 20.sp)
+        announcements.take(3).forEach { AnnouncementBanner(it, palette, accent) }
     }
 }
 

@@ -36,7 +36,7 @@ A revoked terminal wipes its key and state and asks again from step 1.
 
 ## What it does
 
-- **Room screen**: layouts standard, compact and split, dark or light theme, accent colour, and the elements the
+- **Room screen**: layouts standard, compact and split (split stacks the panels on a portrait screen), dark or light theme, accent colour, and the elements the
   console chose to show (room name, building, floor, capacity, clock, announcements).
 - **Status**: label, colour and icon come with each status, so a status created after installation just works.
 - **Announcements**: info, important, urgent, each with its own style. They hide by themselves at their expiry
