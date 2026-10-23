@@ -20,6 +20,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,11 +39,14 @@ import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import com.smartcampus.door.core.crypto.fingerprintOf
 import com.smartcampus.door.core.crypto.formatFingerprint
+import com.smartcampus.door.core.CardEvent
 import com.smartcampus.door.core.net.EnrollPhase
+import com.smartcampus.door.core.protocol.MaintenanceActions
 import com.smartcampus.door.core.provisioning.ServerKeyClient
 import com.smartcampus.door.core.provisioning.ServerKeyInfo
 import com.smartcampus.door.core.provisioning.parseProvisioningLink
 import com.smartcampus.door.core.util.B64
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -51,8 +56,56 @@ fun AppRoot(phase: AppPhase, app: DoorApp) {
             AppPhase.Loading -> Centered { CircularProgressIndicator() }
             is AppPhase.Provisioning -> ProvisioningScreen(phase.error, app::provision)
             is AppPhase.Enrolling -> EnrollmentScreen(phase, onReset = app::reset)
-            is AppPhase.Running -> DoorScreen(phase.controller)
+            is AppPhase.Running -> RunningScreen(phase, app)
         }
+    }
+}
+
+/**
+ * The door, with the card confirmation on top for a moment after each read, then the maintenance
+ * menu when the server opened one. The confirmation comes first so the person sees that the card
+ * was accepted before the menu replaces the screen.
+ */
+@Composable
+private fun RunningScreen(phase: AppPhase.Running, app: DoorApp) {
+    val controller = phase.controller
+    val door by controller.door.collectAsState()
+    val online by controller.online.collectAsState()
+    val maintenance by controller.maintenance.collectAsState()
+    val card by controller.lastCard.collectAsState()
+    val outcome by controller.actionOutcome.collectAsState()
+    val scope = rememberCoroutineScope()
+
+    // Restart is local: the server only records it, so the app restarts once the server has said ok.
+    LaunchedEffect(outcome) {
+        if (outcome?.action == MaintenanceActions.RESTART && outcome?.ok == true) app.restartApp()
+    }
+
+    // Each change of the card state (read, then the answer) restarts the timer, so the verdict stays up a full moment.
+    var confirmation by remember { mutableStateOf<CardEvent?>(null) }
+    LaunchedEffect(card) {
+        val event = card ?: return@LaunchedEffect
+        confirmation = event
+        delay(CARD_RESULT_SCREEN_MS)
+        confirmation = null
+    }
+
+    DoorScreen(controller)
+    if (door.emergency != null) return
+    if (door.isRegistering(System.currentTimeMillis())) RegistrationBanner()
+    val shown = confirmation
+    val session = maintenance
+    when {
+        shown != null -> CardResultScreen(shown)
+        session != null -> MaintenanceScreen(
+            session = session,
+            info = app.maintenanceInfo(),
+            online = online,
+            currentStatus = door.status?.status,
+            outcome = outcome,
+            onAction = { action, status -> scope.launch { controller.maintenanceAction(action, status) } },
+            onClose = controller::closeMaintenance,
+        )
     }
 }
 

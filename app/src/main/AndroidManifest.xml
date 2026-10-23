@@ -7,6 +7,9 @@
     <!-- Only to scan the provisioning QR code. A terminal without a camera is provisioned by fetching the key or typing it. -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <!-- Cards for the maintenance menu and for enrolment. Optional: a terminal without NFC still shows the door. -->
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
 
     <!--
       Cleartext is allowed because identity does not depend on TLS: the handshake authenticates the

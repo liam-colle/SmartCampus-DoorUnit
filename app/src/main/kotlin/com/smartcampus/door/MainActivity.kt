@@ -14,16 +14,31 @@ import com.smartcampus.door.ui.AppRoot
 import com.smartcampus.door.ui.DoorTheme
 
 class MainActivity : ComponentActivity() {
+    private lateinit var cards: NfcCardReader
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enterKioskMode()
         val app = application as DoorApp
+        cards = NfcCardReader(this, app::onCardRead)
         setContent {
             DoorTheme {
                 val phase by app.phase.collectAsState()
                 AppRoot(phase = phase, app = app)
             }
         }
+    }
+
+    // Reader mode only works in the foreground; the kiosk is always there, but a dialog or the
+    // settings screen must hand the antenna back.
+    override fun onResume() {
+        super.onResume()
+        cards.start()
+    }
+
+    override fun onPause() {
+        cards.stop()
+        super.onPause()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
