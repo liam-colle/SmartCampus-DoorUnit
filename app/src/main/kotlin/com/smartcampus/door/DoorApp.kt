@@ -15,6 +15,7 @@ import com.smartcampus.door.core.storage.DeviceConfigStore
 import com.smartcampus.door.core.storage.FileStorage
 import com.smartcampus.door.core.crypto.formatFingerprint
 import com.smartcampus.door.core.crypto.parseServerKey
+import com.smartcampus.door.core.util.B64
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -25,7 +26,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.io.File
-import java.util.Base64
 
 /** What the screen is doing: asking for settings, waiting for an admin, or showing the door. */
 sealed interface AppPhase {
@@ -71,7 +71,7 @@ class DoorApp : Application() {
         val key = serverPublicKey.filterNot(Char::isWhitespace)
         val problem = when {
             url.toHttpUrlOrNull() == null -> "The server address must look like https://campus.example.org"
-            runCatching { parseServerKey(Base64.getDecoder().decode(key)) }.isFailure ->
+            runCatching { parseServerKey(B64.decode(key)) }.isFailure ->
                 "The server key is not valid. Paste the whole base64 public key shown by the server"
             else -> null
         }
@@ -110,7 +110,7 @@ class DoorApp : Application() {
         val deviceId = checkNotNull(config.deviceId) { "an enrolled device has an id" }
         val assets = AssetDownloader(config.serverUrl, deviceId, identity, File(cacheDir, "audio"))
         val controller = DoorController(storage, assets, MediaPlayerAudio(), scope, AudioTrackAlarm(this))
-        val serverKey = parseServerKey(Base64.getDecoder().decode(config.serverPublicKey))
+        val serverKey = parseServerKey(B64.decode(config.serverPublicKey))
         _phase.value = AppPhase.Running(controller)
 
         work = scope.launch {
