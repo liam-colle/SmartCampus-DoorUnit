@@ -23,9 +23,16 @@ export JAVA_HOME=/path/to/jdk17 ANDROID_HOME=/path/to/Android/Sdk
 
 ## First boot
 
-1. The installer enters the **server address** and the **server public key** (base64 SPKI, printed by the server
-   at `secrets/server-key.pub`). The terminal only trusts a server that proves it owns that key; TLS alone is not
-   trusted as proof of identity.
+1. The installer tells the terminal which server to trust, in one of three ways:
+   - **Scan the QR code** from the console (Devices, Provision a device). It carries the address and the key, so the
+     key never crosses the network on the way to the terminal. Needs a camera.
+   - **Fetch the key**: enter the address, tap "Fetch the key from the server", compare the fingerprint with the one
+     in the console and tap "Trust this server". This is trust on first use, and the fingerprint is computed on the
+     terminal from the key, not taken from the server's answer.
+   - **Paste the key** (base64 SPKI, `secrets/server-key.pub`).
+
+   Whichever way it came, the terminal pins the key from then on: it only trusts a server that proves it owns that
+   key, and TLS alone is not trusted as proof of identity.
 2. The terminal creates its own P-256 key in the Android Keystore (the private key can sign but never be read)
    and sends a connection request with the public key. The screen shows the key **fingerprint**.
 3. An admin or operator compares the fingerprint in the console (Devices, connection requests) and approves.
@@ -109,6 +116,7 @@ night sleep (black screen, the device reports `screen: sleep`) and revocation (k
 ## Not covered yet
 
 Not tried on a real Famoco terminal, and the alarm loops have not been judged on a real speaker (on the emulator a
-started `USAGE_ALARM` track was confirmed, and the loops are tested for loudness and a seamless loop point). Typing the
-server key by hand is tedious on a device: a QR code or a managed configuration would be better. No boot receiver: the
-app is meant to be set as the home app of the terminal.
+started `USAGE_ALARM` track was confirmed, and the loops are tested for loudness and a seamless loop point). Scanning the
+provisioning QR code was not tested with a real camera feed (the emulator has no QR to show); the code's format is
+tested against the console's encoder. A managed configuration (MDM) is a further option. No boot receiver: the app is
+meant to be set as the home app of the terminal.
