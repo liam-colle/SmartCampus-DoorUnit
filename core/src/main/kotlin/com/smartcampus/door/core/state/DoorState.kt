@@ -3,6 +3,7 @@ package com.smartcampus.door.core.state
 import com.smartcampus.door.core.protocol.Announcement
 import com.smartcampus.door.core.protocol.AudioSettings
 import com.smartcampus.door.core.protocol.DisplayConfig
+import com.smartcampus.door.core.protocol.Emergency
 import com.smartcampus.door.core.protocol.RoomInfo
 import com.smartcampus.door.core.protocol.RoomStatus
 import com.smartcampus.door.core.protocol.ServerMessage
@@ -23,6 +24,8 @@ data class DoorState(
     val announcements: Map<String, Announcement> = emptyMap(),
     val config: DisplayConfig = DisplayConfig(),
     val audio: AudioSettings = AudioSettings(),
+    /** Shown over everything else, with an alarm, until the server clears it. Persisted so a restart keeps it. */
+    val emergency: Emergency? = null,
     /** serverTime - deviceTime at the last session.ready. Expiry uses it so a wrong device clock cannot show stale announcements. */
     val clockOffsetMs: Long = 0,
     val lastSyncAt: Long? = null,
@@ -43,6 +46,8 @@ data class DoorState(
             status = field("roomStatus") { protocolJson.decodeFromJsonElement<RoomStatus>(it) } ?: status,
             config = field("displayConfig") { protocolJson.decodeFromJsonElement<DisplayConfig>(it) } ?: config,
             audio = field("audioSettings") { protocolJson.decodeFromJsonElement<AudioSettings>(it) } ?: audio,
+            // The desired state is complete: no `emergency` (or null) means the alert is over, even if we missed the clear.
+            emergency = desired["emergency"]?.takeIf { it is JsonObject }?.let { protocolJson.decodeFromJsonElement<Emergency>(it) },
             announcements = field("announcements") { map ->
                 map.values.associate { value ->
                     val announcement = protocolJson.decodeFromJsonElement<Announcement>(value)
@@ -63,6 +68,9 @@ data class DoorState(
             is ServerMessage.AudioSettingsSet -> copy(audio = message.value)
             is ServerMessage.AnnounceShow -> copy(announcements = announcements + (message.value.announcementId to message.value))
             is ServerMessage.AnnounceClear -> copy(announcements = announcements - message.announcementId)
+            is ServerMessage.EmergencySet -> copy(emergency = message.value)
+            // A clear for an alert we no longer show (a newer one took over) must not end the newer one.
+            is ServerMessage.EmergencyClear -> if (emergency?.emergencyId == message.emergencyId) copy(emergency = null) else this
             else -> this
         }
 

@@ -1,9 +1,12 @@
 package com.smartcampus.door.core
 
 import com.smartcampus.door.core.audio.AssetSource
+import com.smartcampus.door.core.audio.AlarmPlayer
 import com.smartcampus.door.core.audio.AudioPlayer
+import com.smartcampus.door.core.audio.NoAlarm
 import com.smartcampus.door.core.net.LinkEvent
 import com.smartcampus.door.core.net.MessageSink
+import com.smartcampus.door.core.protocol.Emergency
 import com.smartcampus.door.core.protocol.ServerMessage
 import com.smartcampus.door.core.protocol.ackPayload
 import com.smartcampus.door.core.protocol.nackPayload
@@ -29,6 +32,15 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.time.ZoneId
 
+/** The alarm loudness of an emergency, 0..1. A power cut is only a heads-up, so it is much softer than a danger alarm. */
+fun alarmLevel(emergency: Emergency, inQuietHours: Boolean): Float = when {
+    emergency.testMode -> if (inQuietHours) 0f else emergency.testVolume.coerceIn(0, 100) / 100f
+    emergency.kind == "power" -> POWER_CUT_LEVEL
+    else -> 1f
+}
+
+private const val POWER_CUT_LEVEL = 0.35f
+
 /** Recent command ids kept so a replayed command is acknowledged again but never run twice. */
 private const val REMEMBERED_IDS = 200
 
@@ -41,6 +53,7 @@ class DoorController(
     private val assets: AssetSource,
     private val player: AudioPlayer,
     private val scope: CoroutineScope,
+    private val alarm: AlarmPlayer = NoAlarm,
     private val zone: ZoneId = ZoneId.systemDefault(),
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
@@ -49,6 +62,11 @@ class DoorController(
     private val seenIds: ArrayDeque<String> = ArrayDeque(loadSeenIds())
     private var session: MessageSink? = null
     private var offlineSince: Long? = clock()
+
+    init {
+        // A restart in the middle of an emergency must not silence it: it ends only when the server says so.
+        _door.value.emergency?.let(::soundAlarm)
+    }
 
     val door: StateFlow<DoorState> = _door.asStateFlow()
     val online: StateFlow<Boolean> = _online.asStateFlow()
@@ -120,6 +138,7 @@ class DoorController(
             put("roomStatus", state.status?.status ?: "")
             put("announcements", JsonArray(state.visibleAnnouncements(now).map { JsonPrimitive(it.announcementId) }))
             put("configApplied", true)
+            state.emergency?.let { put("emergency", it.emergencyId) }
             put("screen", if (state.isAsleep(now, zone)) "sleep" else "on")
             put("volume", state.audio.volume)
             offlineSince?.let { put("offlineSince", it) }
@@ -133,8 +152,24 @@ class DoorController(
 
     private fun update(state: DoorState) {
         val pruned = state.withoutExpired(clock())
+        val before = _door.value.emergency
         _door.value = pruned
+        if (before != pruned.emergency) {
+            val current = pruned.emergency
+            if (current != null) soundAlarm(current) else alarm.stop()
+        }
         storage.write(STATE_KEY, protocolJson.encodeToString(DoorState.serializer(), pruned))
+    }
+
+    /**
+     * A real emergency overrides the volume setting and quiet hours: people must hear it. A test
+     * plays at its own volume and stays silent in quiet hours, so a test never wakes anyone.
+     */
+    private fun soundAlarm(emergency: Emergency) {
+        val state = _door.value
+        val quiet = state.audio.quietHours.contains(state.localTime(clock(), zone))
+        val level = alarmLevel(emergency, quiet)
+        if (level > 0f) alarm.start(emergency.kind, level) else alarm.stop()
     }
 
     private fun remember(id: String) {

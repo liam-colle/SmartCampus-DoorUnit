@@ -87,6 +87,18 @@ data class AudioPlay(
     val size: Long,
 )
 
+/** An emergency takes over the screen and sounds an alarm until it is cleared. */
+@Serializable
+data class Emergency(
+    val emergencyId: String,
+    val kind: String,
+    val title: String,
+    val instructions: String,
+    val testMode: Boolean = false,
+    val testVolume: Int = 20,
+    val startedAt: Long = 0,
+)
+
 /** What the server sends after the handshake. Only these types exist for a door unit. */
 sealed interface ServerMessage {
     val id: String
@@ -99,6 +111,8 @@ sealed interface ServerMessage {
     data class AnnounceShow(override val id: String, val value: Announcement) : ServerMessage
     data class AnnounceClear(override val id: String, val announcementId: String) : ServerMessage
     data class AudioPlayRequest(override val id: String, val value: AudioPlay) : ServerMessage
+    data class EmergencySet(override val id: String, val value: Emergency) : ServerMessage
+    data class EmergencyClear(override val id: String, val emergencyId: String) : ServerMessage
 
     /** A valid command for another kind of device (e.g. access.acl.sync): acknowledged, not acted on. */
     data class Ignored(override val id: String, val type: String) : ServerMessage
@@ -144,6 +158,8 @@ private fun decode(id: String, type: String, payload: JsonObject): ServerMessage
         "announce.show" -> ServerMessage.AnnounceShow(id, payload.decode())
         "announce.clear" -> ServerMessage.AnnounceClear(id, payload["announcementId"]!!.jsonPrimitive.content)
         "audio.play" -> ServerMessage.AudioPlayRequest(id, payload.decode())
+        "emergency.set" -> ServerMessage.EmergencySet(id, payload.decode())
+        "emergency.clear" -> ServerMessage.EmergencyClear(id, payload["emergencyId"]!!.jsonPrimitive.content)
         else -> ServerMessage.Ignored(id, type)
     }
 

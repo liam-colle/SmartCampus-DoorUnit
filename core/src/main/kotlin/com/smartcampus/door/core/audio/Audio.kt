@@ -15,6 +15,20 @@ interface AudioPlayer {
     suspend fun play(file: File, volumePercent: Int)
 }
 
+/**
+ * Sounds an emergency alarm in a loop until [stop]. Both calls return at once; the platform
+ * implementation owns the thread. [level] is 0..1 and the alarm ignores the media volume.
+ */
+interface AlarmPlayer {
+    fun start(kind: String, level: Float)
+    fun stop()
+}
+
+object NoAlarm : AlarmPlayer {
+    override fun start(kind: String, level: Float) = Unit
+    override fun stop() = Unit
+}
+
 /** Where sounds come from. A seam so the controller can be tested without a server. */
 interface AssetSource {
     suspend fun fetch(assetId: String, sha256: String, size: Long): File
