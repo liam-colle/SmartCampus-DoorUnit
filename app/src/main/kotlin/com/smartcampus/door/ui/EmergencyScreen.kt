@@ -12,14 +12,21 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,10 +40,11 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import com.smartcampus.door.core.protocol.Emergency
 import kotlin.math.PI
 import kotlin.math.cos
@@ -69,52 +77,115 @@ fun EmergencyScreen(doorCode: String?, emergency: Emergency) {
     val sweep by transition.animateFloat(0f, 1f, infiniteRepeatable(tween(1600, easing = LinearEasing), RepeatMode.Restart), label = "sweep")
     val breathe by transition.animateFloat(0f, 1f, infiniteRepeatable(tween(2200), RepeatMode.Reverse), label = "breathe")
 
-    Box(
+    BoxWithConstraints(
         Modifier
             .fillMaxSize()
             .background(EmergencyBackground)
             // A faint wash that breathes with the alarm: it draws the eye without flashing.
             .background(Brush.radialGradient(listOf(accent.copy(alpha = 0.05f + 0.07f * breathe), Color.Transparent))),
     ) {
-        Column(Modifier.fillMaxSize().padding(horizontal = 32.dp, vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
+        // Why one unit from the short side: a fixed sp/dp size is right on one screen and huge on a
+        // smaller one. Everything below is a multiple of this unit (1% of the short side), so the
+        // screen keeps its proportions from a 5.5" Famoco to a wall tablet, in either orientation.
+        val screenHeight = maxHeight
+        val screenWidth = maxWidth
+        val unit = minOf(screenWidth, screenHeight) / 100
+        val density = LocalDensity.current
+        // Sizes ignore the system font scale on purpose: a kiosk screen must not break its layout
+        // because someone changed the accessibility setting on the device.
+        fun size(factor: Float) = with(density) { (unit * factor).toSp() }
+
+        Column(
+            Modifier.fillMaxSize().padding(horizontal = unit * 7, vertical = unit * 5),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            val codeSpacing = unit * 1.6f
+            FitText(
                 doorCode.orEmpty(),
                 color = EmergencyText,
-                fontSize = 40.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 6.sp,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
+                size = size(7.5f),
+                weight = FontWeight.Medium,
+                letterSpacing = size(1.6f),
+                singleLine = true,
+                // Letter spacing is also added after the last character, which would pull a centred text to the left.
+                modifier = Modifier.fillMaxWidth().padding(start = codeSpacing),
             )
-            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-                Canvas(Modifier.fillMaxSize()) { drawEmblem(emergency.kind, accent, sweep, breathe, horizontal = maxWidth > maxHeight) }
+            val landscape = screenWidth > screenHeight
+            val emblem = @Composable { modifier: Modifier ->
+                BoxWithConstraints(modifier.padding(vertical = unit * 2)) {
+                    Canvas(Modifier.fillMaxSize()) { drawEmblem(emergency.kind, accent, sweep, breathe, horizontal = maxWidth > maxHeight) }
+                }
             }
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (emergency.testMode) TestTag(accent)
-                Text(emergency.title, color = accent, fontSize = 38.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
-                Text(
-                    emergency.instructions,
-                    color = EmergencyMuted,
-                    fontSize = 21.sp,
-                    lineHeight = 29.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.widthIn(max = 760.dp),
-                )
+            val message = @Composable { modifier: Modifier, textHeight: Dp ->
+                Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(unit * 2.4f)) {
+                    if (emergency.testMode) TestTag(accent, size(3.4f), unit)
+                    FitText(emergency.title, color = accent, size = size(8.4f), weight = FontWeight.SemiBold, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    FitText(
+                        emergency.instructions,
+                        color = EmergencyMuted,
+                        size = size(5.2f),
+                        weight = FontWeight.Normal,
+                        // Capped so the emblem stays the main thing on the screen.
+                        modifier = Modifier.fillMaxWidth().heightIn(max = textHeight),
+                    )
+                }
+            }
+            if (landscape) {
+                // Side by side: stacking them would leave the emblem a thumbnail on a wide, short screen.
+                Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    emblem(Modifier.weight(1f).fillMaxHeight())
+                    Spacer(Modifier.width(unit * 6))
+                    message(Modifier.weight(1f), screenHeight * 0.7f)
+                }
+            } else {
+                emblem(Modifier.weight(1f).fillMaxWidth())
+                message(Modifier, screenHeight * 0.34f)
             }
         }
     }
 }
 
+/**
+ * Centred text that shrinks until it fits its box, so a long title or a long procedure written by
+ * an admin never overflows or gets cut. [size] is the preferred size, it never goes below 60% of it.
+ */
+@Composable
+private fun FitText(
+    text: String,
+    color: Color,
+    size: TextUnit,
+    weight: FontWeight,
+    modifier: Modifier = Modifier,
+    singleLine: Boolean = false,
+    letterSpacing: TextUnit = TextUnit.Unspecified,
+) {
+    var scale by remember(text, size) { mutableFloatStateOf(1f) }
+    Text(
+        text,
+        color = color,
+        fontSize = size * scale,
+        lineHeight = size * scale * 1.3f,
+        fontWeight = weight,
+        letterSpacing = letterSpacing,
+        textAlign = TextAlign.Center,
+        maxLines = if (singleLine) 1 else Int.MAX_VALUE,
+        softWrap = !singleLine,
+        onTextLayout = { if (it.hasVisualOverflow && scale > 0.6f) scale = (scale * 0.92f).coerceAtLeast(0.6f) },
+        modifier = modifier,
+    )
+}
+
 /** A test must never be mistaken for the real thing by someone who only glances at the screen. */
 @Composable
-private fun TestTag(accent: Color) {
+private fun TestTag(accent: Color, size: TextUnit, unit: Dp) {
     Text(
         "TEST — NO REAL EMERGENCY",
         color = EmergencyBackground,
-        fontSize = 15.sp,
+        fontSize = size,
         fontWeight = FontWeight.Bold,
-        letterSpacing = 2.sp,
-        modifier = Modifier.clip(RoundedCornerShape(50)).background(accent).padding(horizontal = 14.dp, vertical = 5.dp),
+        letterSpacing = size * 0.12f,
+        maxLines = 1,
+        modifier = Modifier.clip(RoundedCornerShape(50)).background(accent).padding(horizontal = unit * 3.4f, vertical = unit * 1.2f),
     )
 }
 
