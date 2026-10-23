@@ -79,8 +79,19 @@ SC_E2E_ADMIN_EMAIL=admin@smartcampus.local SC_E2E_ADMIN_PASSWORD=changeme123 \
 ./gradlew :core:test --tests '*EndToEndTest*'
 ```
 
+## Run on an emulator
+
+Install the emulator and a system image (`sdkmanager "emulator" "system-images;android-34;google_apis;x86_64"`),
+create an AVD (`avdmanager create avd -n door-test -k "system-images;android-34;google_apis;x86_64" -d pixel_tablet`),
+boot it (it needs KVM, and `-no-window` works for a headless machine) and `adb install` the debug APK. The emulator
+reaches the host at `10.0.2.2`, so the server address is `http://10.0.2.2:3000`.
+
+Checked this way against a local central server: provisioning and enrollment (the fingerprint on screen matches the
+console), live status changes, split layout with the light theme, urgent announcement, audio download and playback
+at the configured volume, offline badge and a cold restart without network, automatic reconnection (about 6 s),
+night sleep (black screen, the device reports `screen: sleep`) and revocation (key and state wiped, back to setup).
+
 ## Not covered yet
 
-The app was built and its logic tested on the JVM, but it has not been run on a device or an emulator yet:
-Compose screens, MediaPlayer playback and the Keystore key are unverified at runtime. No boot receiver: the app
-is meant to be set as the home app of the terminal.
+Not tried on a real Famoco terminal. Typing the server key by hand is tedious on a device: a QR code or a
+managed configuration would be better. No boot receiver: the app is meant to be set as the home app of the terminal.
