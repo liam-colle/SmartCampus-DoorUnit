@@ -145,36 +145,6 @@ fun EmergencyScreen(doorCode: String?, emergency: Emergency) {
     }
 }
 
-/**
- * Centred text that shrinks until it fits its box, so a long title or a long procedure written by
- * an admin never overflows or gets cut. [size] is the preferred size, it never goes below 60% of it.
- */
-@Composable
-private fun FitText(
-    text: String,
-    color: Color,
-    size: TextUnit,
-    weight: FontWeight,
-    modifier: Modifier = Modifier,
-    singleLine: Boolean = false,
-    letterSpacing: TextUnit = TextUnit.Unspecified,
-) {
-    var scale by remember(text, size) { mutableFloatStateOf(1f) }
-    Text(
-        text,
-        color = color,
-        fontSize = size * scale,
-        lineHeight = size * scale * 1.3f,
-        fontWeight = weight,
-        letterSpacing = letterSpacing,
-        textAlign = TextAlign.Center,
-        maxLines = if (singleLine) 1 else Int.MAX_VALUE,
-        softWrap = !singleLine,
-        onTextLayout = { if (it.hasVisualOverflow && scale > 0.6f) scale = (scale * 0.92f).coerceAtLeast(0.6f) },
-        modifier = modifier,
-    )
-}
-
 /** A test must never be mistaken for the real thing by someone who only glances at the screen. */
 @Composable
 private fun TestTag(accent: Color, size: TextUnit, unit: Dp) {
