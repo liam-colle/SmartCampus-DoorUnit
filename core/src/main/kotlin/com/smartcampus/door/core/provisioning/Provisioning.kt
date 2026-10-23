@@ -2,6 +2,7 @@ package com.smartcampus.door.core.provisioning
 
 import com.smartcampus.door.core.crypto.fingerprintOf
 import com.smartcampus.door.core.crypto.parseServerKey
+import com.smartcampus.door.core.util.B64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -12,7 +13,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
 import java.net.URLDecoder
-import java.util.Base64
 import java.util.concurrent.TimeUnit
 
 /** What an installer provisions: where the server is and the key the terminal will pin. */
@@ -47,7 +47,7 @@ fun parseProvisioningLink(text: String): ProvisioningLink {
 
 /** Throws unless [base64] is a P-256 public key in SPKI form. */
 fun validateServerKey(base64: String): ByteArray {
-    val bytes = runCatching { Base64.getDecoder().decode(base64) }.getOrNull() ?: throw ProvisioningException("The server key is not valid base64")
+    val bytes = runCatching { B64.decode(base64) }.getOrNull() ?: throw ProvisioningException("The server key is not valid base64")
     runCatching { parseServerKey(bytes) }.getOrNull() ?: throw ProvisioningException("The server key is not a valid P-256 public key")
     return bytes
 }

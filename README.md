@@ -1,6 +1,6 @@
 # Smart Campus Door Unit
 
-Android app for the door terminals of Smart Campus (Famoco, Android 8 and later). A terminal is linked to a
+Android app for the door terminals of Smart Campus (Famoco, Android 6 and later). A terminal is linked to a
 room and shows its name, its status (free, occupied, closed, works, or a custom one), announcements with their
 priority, and a clock. It is managed from the console of
 [SmartCampus-CentralServer](https://github.com/liam-colle/SmartCampus-CentralServer).
@@ -84,6 +84,16 @@ a title and the procedure. `emergency.clear` restores the door screen. Decisions
   full desired state decides: no emergency in it means the alert ended, even if the clear was missed.
 - **It overrides night sleep** and sets the brightness to full.
 - A clear for an alert that a newer one replaced does not end the newer one.
+
+## Android versions
+
+The minimum is Android 6 (API 23), the first version where the Keystore signs with ECDSA. What that took:
+`java.util.Base64` and `AlgorithmParameters("EC")` do not exist there, so the core uses `B64` and the written-out P-256
+parameters (a test checks them against the platform's curve); `java.time` is backported by core library desugaring; the
+QR scanner pins an older zxing core; and before Android 11 the kiosk mode sets the hide flags again whenever the system
+clears them. Android 6 shows a one-time "Viewing full screen" tip the first time the app goes full screen.
+Checked on an API 23 emulator: provisioning, key fetch, enrollment, handshake, status, announcement, clock and the
+emergency alarm (an active alarm-stream track at the test volume).
 
 ## Tests
 

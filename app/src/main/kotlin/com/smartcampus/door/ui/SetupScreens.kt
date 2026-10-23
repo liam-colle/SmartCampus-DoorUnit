@@ -41,8 +41,8 @@ import com.smartcampus.door.core.net.EnrollPhase
 import com.smartcampus.door.core.provisioning.ServerKeyClient
 import com.smartcampus.door.core.provisioning.ServerKeyInfo
 import com.smartcampus.door.core.provisioning.parseProvisioningLink
+import com.smartcampus.door.core.util.B64
 import kotlinx.coroutines.launch
-import java.util.Base64
 
 @Composable
 fun AppRoot(phase: AppPhase, app: DoorApp) {
@@ -146,7 +146,7 @@ fun ProvisioningScreen(error: String?, onSubmit: (url: String, serverKey: String
             if (keyFrom != null) {
                 Text("Server key received from $keyFrom", color = Brand)
                 Text(
-                    formatFingerprint(fingerprintOf(Base64.getDecoder().decode(key.filterNot(Char::isWhitespace)))),
+                    formatFingerprint(fingerprintOf(B64.decode(key.filterNot(Char::isWhitespace)))),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
