@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Smart Campus mark (docs/smart-campus-logo.svg of the central server), scaled into the adaptive icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <group
+        android:pivotX="256"
+        android:pivotY="256"
+        android:scaleX="0.62"
+        android:scaleY="0.62">
+        <path
+            android:pathData="M287.26,78.73 A180,180 0 0 1 425.14,317.56"
+            android:strokeColor="#00A86B"
+            android:strokeWidth="56" />
+        <path
+            android:pathData="M393.89,371.7 A180,180 0 0 1 118.11,371.7"
+            android:strokeColor="#00A86B"
+            android:strokeWidth="56" />
+        <path
+            android:pathData="M86.86,317.56 A180,180 0 0 1 224.74,78.73"
+            android:strokeColor="#00A86B"
+            android:strokeWidth="56" />
+        <path
+            android:fillColor="#00A86B"
+            android:pathData="M192,256 a64,64 0 1 0 128,0 a64,64 0 1 0 -128,0" />
+    </group>
+</vector>
