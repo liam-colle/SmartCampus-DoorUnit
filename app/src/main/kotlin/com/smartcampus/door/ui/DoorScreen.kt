@@ -46,6 +46,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.smartcampus.door.core.DoorController
@@ -124,39 +126,43 @@ private fun DoorContent(door: DoorState, online: Boolean, now: Long) {
     val accent = parseColor(door.config.accentColor)
     val announcements = if (door.config.show.announcements) door.visibleAnnouncements(now) else emptyList()
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(palette.background).padding(32.dp)) {
-        // Symptom: in portrait the split layout gave each column half of a narrow screen and the status label
-        // broke in the middle of a word. Fix: side by side only on a landscape screen, stacked otherwise.
+    BoxWithConstraints(Modifier.fillMaxSize().background(palette.background)) {
         val landscape = maxWidth > maxHeight
-        when {
-            door.config.layout == "split" && landscape -> Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                RoomBlock(door, now, palette, accent, compact = false, modifier = Modifier.weight(1f).fillMaxHeight())
-                AnnouncementPanel(announcements, palette, accent, Modifier.weight(1f).fillMaxHeight())
+        val s = Scale(minOf(maxWidth, maxHeight), LocalDensity.current)
+        Box(Modifier.fillMaxSize().padding(s.dp(6f))) {
+            // Symptom: in portrait the split layout gave each column half of a narrow screen and the status label
+            // broke in the middle of a word. Fix: side by side only on a landscape screen, stacked otherwise.
+            val gap = s.dp(5f)
+            when {
+                door.config.layout == "split" && landscape -> Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    RoomBlock(door, now, palette, accent, s, compact = false, modifier = Modifier.weight(1f).fillMaxHeight())
+                    AnnouncementPanel(announcements, palette, accent, s, Modifier.weight(1f).fillMaxHeight())
+                }
+                door.config.layout == "split" -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                    RoomBlock(door, now, palette, accent, s, compact = false, modifier = Modifier.weight(1f).fillMaxWidth())
+                    AnnouncementPanel(announcements, palette, accent, s, Modifier.weight(1f).fillMaxWidth())
+                }
+                else -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                    RoomBlock(door, now, palette, accent, s, compact = door.config.layout == "compact", modifier = Modifier.weight(1f).fillMaxWidth())
+                    announcements.firstOrNull()?.let { AnnouncementBanner(it, palette, accent, s) }
+                }
             }
-            door.config.layout == "split" -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                RoomBlock(door, now, palette, accent, compact = false, modifier = Modifier.weight(3f).fillMaxWidth())
-                AnnouncementPanel(announcements, palette, accent, Modifier.weight(2f).fillMaxWidth())
-            }
-            else -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                RoomBlock(door, now, palette, accent, compact = door.config.layout == "compact", modifier = Modifier.weight(1f).fillMaxWidth())
-                announcements.firstOrNull()?.let { AnnouncementBanner(it, palette, accent) }
-            }
+            if (!online) OfflineBadge(s, Modifier.align(Alignment.TopEnd))
         }
-        if (!online) OfflineBadge(Modifier.align(Alignment.TopEnd))
     }
 }
 
 @Composable
-private fun AnnouncementPanel(announcements: List<Announcement>, palette: Palette, accent: Color, modifier: Modifier) {
-    Column(modifier.clip(RoundedCornerShape(20.dp)).background(palette.surface).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Announcements", color = palette.muted, fontSize = 18.sp)
-        if (announcements.isEmpty()) Text("Nothing to show.", color = palette.muted, fontSize = 20.sp)
-        announcements.take(3).forEach { AnnouncementBanner(it, palette, accent) }
+private fun AnnouncementPanel(announcements: List<Announcement>, palette: Palette, accent: Color, s: Scale, modifier: Modifier) {
+    Column(modifier.clip(RoundedCornerShape(s.dp(4f))).background(palette.surface).padding(s.dp(4f)), verticalArrangement = Arrangement.spacedBy(s.dp(3f))) {
+        Text("Announcements", color = palette.muted, fontSize = s.sp(4.6f), lineHeight = s.sp(5.8f))
+        if (announcements.isEmpty()) Text("Nothing to show.", color = palette.muted, fontSize = s.sp(5f), lineHeight = s.sp(6.2f))
+        announcements.take(3).forEach { AnnouncementBanner(it, palette, accent, s) }
     }
 }
 
 @Composable
-private fun RoomBlock(door: DoorState, now: Long, palette: Palette, accent: Color, compact: Boolean, modifier: Modifier) {
+private fun RoomBlock(door: DoorState, now: Long, palette: Palette, accent: Color, s: Scale, compact: Boolean, modifier: Modifier) {
     val room = door.room
     val show = door.config.show
     val place = listOfNotNull(
@@ -165,39 +171,41 @@ private fun RoomBlock(door: DoorState, now: Long, palette: Palette, accent: Colo
     ).joinToString(" · ")
 
     Column(modifier, verticalArrangement = Arrangement.SpaceBetween) {
-        Column {
-            Text(place, color = palette.muted, fontSize = 22.sp)
+        Column(verticalArrangement = Arrangement.spacedBy(s.dp(1f))) {
+            if (place.isNotEmpty()) FitText(place, palette.muted, s.sp(5.2f), FontWeight.Normal, Modifier.fillMaxWidth(), singleLine = true, align = TextAlign.Start)
             if (show.roomName) {
-                Text(
+                FitText(
                     room?.name?.ifBlank { room.code } ?: "No room linked",
-                    color = palette.text,
-                    fontSize = if (compact) 44.sp else 72.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    palette.text,
+                    s.sp(if (compact) 10f else 14f),
+                    FontWeight.SemiBold,
+                    Modifier.fillMaxWidth(),
                     maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+                    align = TextAlign.Start,
                 )
-                if (room != null && room.name.isNotBlank()) Text(room.code, color = palette.muted, fontSize = 22.sp)
+                if (room != null && room.name.isNotBlank()) FitText(room.code, palette.muted, s.sp(5.2f), FontWeight.Normal, Modifier.fillMaxWidth(), singleLine = true, align = TextAlign.Start)
             }
         }
-        StatusBand(door, accent, palette, compact)
+        StatusBand(door, accent, palette, s, compact)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
-            Text(if (show.capacity && room?.capacity != null) "${room.capacity} seats" else "", color = palette.muted, fontSize = 22.sp)
-            if (show.clock) Text(door.localTime(now, zone).format(clockFormat), color = palette.text, fontSize = 40.sp, fontWeight = FontWeight.Medium)
+            Text(if (show.capacity && room?.capacity != null) "${room.capacity} seats" else "", color = palette.muted, fontSize = s.sp(5.2f), lineHeight = s.sp(6.5f))
+            if (show.clock) Text(door.localTime(now, zone).format(clockFormat), color = palette.text, fontSize = s.sp(9f), lineHeight = s.sp(11f), fontWeight = FontWeight.Medium)
         }
     }
 }
 
 @Composable
-private fun StatusBand(door: DoorState, accent: Color, palette: Palette, compact: Boolean) {
+private fun StatusBand(door: DoorState, accent: Color, palette: Palette, s: Scale, compact: Boolean) {
     val status = door.status
     val color = status?.let { parseColor(it.color, accent) } ?: palette.muted
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(color.copy(alpha = 0.15f)).padding(horizontal = 28.dp, vertical = 22.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(s.dp(4f))).background(color.copy(alpha = 0.15f)).padding(horizontal = s.dp(5f), vertical = s.dp(4f)),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(20.dp),
+        horizontalArrangement = Arrangement.spacedBy(s.dp(3.5f)),
     ) {
-        if (status != null) Icon(iconFor(status.icon), contentDescription = null, tint = color, modifier = Modifier.size(if (compact) 40.dp else 64.dp))
-        Text(status?.label ?: "No status", color = color, fontSize = if (compact) 36.sp else 56.sp, fontWeight = FontWeight.SemiBold)
+        if (status != null) Icon(iconFor(status.icon), contentDescription = null, tint = color, modifier = Modifier.size(s.dp(if (compact) 8f else 11f)))
+        // weight: the label takes what the icon leaves, so a long label shrinks instead of pushing past the band.
+        FitText(status?.label ?: "No status", color, s.sp(if (compact) 8f else 11f), FontWeight.SemiBold, Modifier.weight(1f), maxLines = 2, align = TextAlign.Start)
     }
 }
 
@@ -209,26 +217,28 @@ private fun priorityColor(priority: String, accent: Color) = when (priority) {
 }
 
 @Composable
-private fun AnnouncementBanner(announcement: Announcement, palette: Palette, accent: Color) {
+private fun AnnouncementBanner(announcement: Announcement, palette: Palette, accent: Color, s: Scale) {
     val color = priorityColor(announcement.priority, accent)
-    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(14.dp)).background(color.copy(alpha = 0.14f))) {
-        Box(Modifier.width(8.dp).fillMaxHeight().background(color))
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            announcement.title?.takeIf { it.isNotBlank() }?.let { Text(it, color = palette.text, fontSize = 26.sp, fontWeight = FontWeight.SemiBold) }
-            Text(announcement.text, color = palette.text, fontSize = 22.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(s.dp(3f))).background(color.copy(alpha = 0.14f))) {
+        Box(Modifier.width(s.dp(1.6f)).fillMaxHeight().background(color))
+        Column(Modifier.padding(s.dp(3.5f)), verticalArrangement = Arrangement.spacedBy(s.dp(1f))) {
+            announcement.title?.takeIf { it.isNotBlank() }?.let {
+                FitText(it, palette.text, s.sp(5.6f), FontWeight.SemiBold, Modifier.fillMaxWidth(), maxLines = 2, align = TextAlign.Start)
+            }
+            FitText(announcement.text, palette.text, s.sp(4.8f), FontWeight.Normal, Modifier.fillMaxWidth(), maxLines = 4, align = TextAlign.Start)
         }
     }
 }
 
 @Composable
-private fun OfflineBadge(modifier: Modifier) {
+private fun OfflineBadge(s: Scale, modifier: Modifier) {
     Row(
-        modifier.clip(RoundedCornerShape(50)).background(Color(0xCC000000)).padding(horizontal = 14.dp, vertical = 8.dp),
+        modifier.clip(RoundedCornerShape(50)).background(Color(0xCC000000)).padding(horizontal = s.dp(3.2f), vertical = s.dp(1.8f)),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(s.dp(1.8f)),
     ) {
-        Icon(Icons.Filled.WifiOff, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-        Text("Offline, showing the last known state", color = Color.White, fontSize = 15.sp)
+        Icon(Icons.Filled.WifiOff, contentDescription = null, tint = Color.White, modifier = Modifier.size(s.dp(4f)))
+        Text("Offline, showing the last known state", color = Color.White, fontSize = s.sp(3.4f), lineHeight = s.sp(4.4f))
     }
 }
 
