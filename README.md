@@ -85,6 +85,40 @@ a title and the procedure. `emergency.clear` restores the door screen. Decisions
 - **It overrides night sleep** and sets the brightness to full.
 - A clear for an alert that a newer one replaced does not end the newer one.
 
+## Cards and the maintenance menu
+
+The NFC antenna is read in reader mode while the app is in front (`NfcCardReader`). Only the card's serial number is read, never its
+content. Each tap becomes an `event.badge` and the server answers with `card.result`.
+
+What the person sees and hears:
+
+- **Sounds** (system tones, `ToneGeneratorCards`): a short beep when the card is read, a rising pair when it was accepted, a low buzz
+  when it was refused or could not be checked. They follow the volume setting and stay silent in quiet hours and during an emergency.
+- **Confirmation screen** for 1.5 s after each read: "Card read, checking", then "Access granted" (green check, with the name) or
+  "Access denied" with the reason (card not registered, disabled, too many cards, offline). A card whose number was read is never
+  reported as "not recognised"; an unregistered card is "not registered". The screen comes before the maintenance menu opens.
+- **Maintenance menu** for an enabled administrator's or operator's card, closed after 60 s without a touch: Information (terminal,
+  server, connection, key fingerprint, version), Set room status (the statuses the server offers, applied to the terminal's room),
+  Restart app, and Revoke this terminal (administrators only, with a confirmation). The answer of the server is shown under the buttons.
+- While an admin runs a card registration on this terminal, cards are collected by the server, the confirmation reads "Card read, added
+  to the registration" and the menu stays shut. The mode ends by itself at its expiry time, even offline.
+
+Every menu button is a `maintenance.action` that the server checks against the card that opened the menu (still valid, person still
+enabled, administrator for revoke) and writes to the audit log, so the screen is a convenience and not the permission.
+
+**Restart app is not a hardware reboot.** An ordinary app cannot reboot the terminal. The process is killed and Android starts the home
+app again (an alarm restarts it on a terminal where the app is not the home app). A real reboot needs device-owner or system rights, for
+example through the Famoco MDM.
+
+**Decision: the unit never decides who is an administrator.** It forwards the serial number and obeys the answer. Alternative rejected:
+keeping a list of privileged cards on the unit, which works offline but keeps opening the menu for someone removed from the group.
+Mitigations: the menu is closed when the connection drops, when an emergency starts (and cannot be opened during one), and an answer
+that does not match a recent tap of ours, or is older than 10 s, is ignored. A card resting on the antenna counts as one tap for 2 s.
+
+**Known limitations.** A serial number is not a secret and can be cloned, so the menu is only as trustworthy as the card. Some phones and
+newer cards present a random UID that changes on every tap; those cannot be enrolled. Not tested on a real NFC reader (the emulator has
+none): the logic is covered by `CardAccessTest`, the antenna itself needs a Famoco or any phone with NFC.
+
 ## Android versions
 
 The minimum is Android 6 (API 23), the first version where the Keystore signs with ECDSA. What that took:
