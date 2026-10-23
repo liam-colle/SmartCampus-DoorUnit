@@ -4,6 +4,7 @@ import com.smartcampus.door.core.protocol.Announcement
 import com.smartcampus.door.core.protocol.AudioSettings
 import com.smartcampus.door.core.protocol.DisplayConfig
 import com.smartcampus.door.core.protocol.Emergency
+import com.smartcampus.door.core.protocol.RegistrationWindow
 import com.smartcampus.door.core.protocol.RoomInfo
 import com.smartcampus.door.core.protocol.RoomStatus
 import com.smartcampus.door.core.protocol.ServerMessage
@@ -26,6 +27,8 @@ data class DoorState(
     val audio: AudioSettings = AudioSettings(),
     /** Shown over everything else, with an alarm, until the server clears it. Persisted so a restart keeps it. */
     val emergency: Emergency? = null,
+    /** Set while the server collects cards presented to this reader. Persisted so a restart keeps the mode until it expires. */
+    val registration: RegistrationWindow? = null,
     /** serverTime - deviceTime at the last session.ready. Expiry uses it so a wrong device clock cannot show stale announcements. */
     val clockOffsetMs: Long = 0,
     val lastSyncAt: Long? = null,
@@ -38,6 +41,10 @@ data class DoorState(
             .sortedWith(compareByDescending<Announcement> { priorityRank(it.priority) }.thenBy { it.announcementId })
     }
 
+    /** True while cards presented to this unit are being collected for enrolment. */
+    fun isRegistering(deviceNowMs: Long): Boolean =
+        registration?.let { it.expiresAt == null || it.expiresAt > deviceNowMs + clockOffsetMs } ?: false
+
     /** Applies the full desired state sent at the start of a session. It replaces what the server manages. */
     fun withDesired(desired: JsonObject, serverTime: Long, deviceNowMs: Long): DoorState {
         fun <T> field(name: String, decode: (JsonObject) -> T): T? = desired[name]?.jsonObject?.let(decode)
@@ -48,6 +55,8 @@ data class DoorState(
             audio = field("audioSettings") { protocolJson.decodeFromJsonElement<AudioSettings>(it) } ?: audio,
             // The desired state is complete: no `emergency` (or null) means the alert is over, even if we missed the clear.
             emergency = desired["emergency"]?.takeIf { it is JsonObject }?.let { protocolJson.decodeFromJsonElement<Emergency>(it) },
+            // Same rule: a desired state without a registration window means it ended.
+            registration = desired["registration"]?.takeIf { it is JsonObject }?.let { protocolJson.decodeFromJsonElement<RegistrationWindow>(it) },
             announcements = field("announcements") { map ->
                 map.values.associate { value ->
                     val announcement = protocolJson.decodeFromJsonElement<Announcement>(value)
@@ -69,6 +78,11 @@ data class DoorState(
             is ServerMessage.AnnounceShow -> copy(announcements = announcements + (message.value.announcementId to message.value))
             is ServerMessage.AnnounceClear -> copy(announcements = announcements - message.announcementId)
             is ServerMessage.EmergencySet -> copy(emergency = message.value)
+            is ServerMessage.RegistrationModeSet ->
+                // A stop for a session we already left (a newer one started) must not end the newer one.
+                if (message.value.active) copy(registration = message.value)
+                else if (registration?.sessionId == message.value.sessionId) copy(registration = null)
+                else this
             // A clear for an alert we no longer show (a newer one took over) must not end the newer one.
             is ServerMessage.EmergencyClear -> if (emergency?.emergencyId == message.emergencyId) copy(emergency = null) else this
             else -> this

@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -99,6 +100,41 @@ data class Emergency(
     val startedAt: Long = 0,
 )
 
+/**
+ * While a window is active, cards presented to this reader are collected by the server for
+ * enrolment, not treated as logins. The unit leaves the mode by itself at [expiresAt] (server
+ * time), even when it is offline, so a lost "stop" never leaves the maintenance menu locked out.
+ */
+@Serializable
+data class RegistrationWindow(val sessionId: String, val active: Boolean = true, val expiresAt: Long? = null)
+
+/** Outcomes of `card.result`. */
+object CardOutcome {
+    const val MAINTENANCE = "maintenance"
+    const val RECOGNISED = "recognised"
+    const val CAPTURED = "captured"
+    const val UNKNOWN = "unknown"
+    const val DISABLED = "disabled"
+    const val DUPLICATE = "duplicate"
+    const val ALREADY_REGISTERED = "already_registered"
+    const val RATE_LIMITED = "rate_limited"
+}
+
+/** A room status the menu can set. Travels with its look, like `room.status.set`, so no catalogue is kept here. */
+@Serializable
+data class MenuStatus(val key: String, val label: String, val color: String, val icon: String)
+
+/** What the server offers the person whose card opened the menu. */
+@Serializable
+data class CardMenu(val statuses: List<MenuStatus> = emptyList(), val canRevoke: Boolean = false)
+
+/** The actions of the maintenance menu, as the server names them. */
+object MaintenanceActions {
+    const val SET_STATUS = "status.set"
+    const val RESTART = "restart"
+    const val REVOKE = "revoke"
+}
+
 /** What the server sends after the handshake. Only these types exist for a door unit. */
 sealed interface ServerMessage {
     val id: String
@@ -113,6 +149,23 @@ sealed interface ServerMessage {
     data class AudioPlayRequest(override val id: String, val value: AudioPlay) : ServerMessage
     data class EmergencySet(override val id: String, val value: Emergency) : ServerMessage
     data class EmergencyClear(override val id: String, val emergencyId: String) : ServerMessage
+    data class RegistrationModeSet(override val id: String, val value: RegistrationWindow) : ServerMessage
+
+    /**
+     * The answer to an `event.badge` ([ref] is its id). Not a command: it is never acknowledged nor
+     * remembered, because a late answer must not open a menu for someone who has walked away.
+     */
+    data class CardResult(
+        override val id: String,
+        val ref: String,
+        val outcome: String,
+        val maintenance: Boolean,
+        val name: String?,
+        val menu: CardMenu? = null,
+    ) : ServerMessage
+
+    /** The answer to a `maintenance.action` ([ref] is its id). Not a command either. */
+    data class MaintenanceResult(override val id: String, val ref: String, val action: String, val ok: Boolean, val error: String?) : ServerMessage
 
     /** A valid command for another kind of device (e.g. access.acl.sync): acknowledged, not acted on. */
     data class Ignored(override val id: String, val type: String) : ServerMessage
@@ -160,6 +213,22 @@ private fun decode(id: String, type: String, payload: JsonObject): ServerMessage
         "audio.play" -> ServerMessage.AudioPlayRequest(id, payload.decode())
         "emergency.set" -> ServerMessage.EmergencySet(id, payload.decode())
         "emergency.clear" -> ServerMessage.EmergencyClear(id, payload["emergencyId"]!!.jsonPrimitive.content)
+        "registration.mode.set" -> ServerMessage.RegistrationModeSet(id, payload.decode())
+        "card.result" -> ServerMessage.CardResult(
+            id,
+            ref = payload["ref"]!!.jsonPrimitive.content,
+            outcome = payload["outcome"]!!.jsonPrimitive.content,
+            maintenance = payload["maintenance"]!!.jsonPrimitive.boolean,
+            name = payload["name"]?.jsonPrimitive?.contentOrNull,
+            menu = payload["menu"]?.takeIf { it is JsonObject }?.jsonObject?.decode<CardMenu>(),
+        )
+        "maintenance.result" -> ServerMessage.MaintenanceResult(
+            id,
+            ref = payload["ref"]!!.jsonPrimitive.content,
+            action = payload["action"]!!.jsonPrimitive.content,
+            ok = payload["ok"]!!.jsonPrimitive.boolean,
+            error = payload["error"]?.jsonPrimitive?.contentOrNull,
+        )
         else -> ServerMessage.Ignored(id, type)
     }
 
@@ -183,3 +252,15 @@ fun nackPayload(ref: String, reason: String): JsonObject = buildJsonObject {
 
 fun statePayload(state: JsonObject): JsonObject = buildJsonObject { put("state", state) }
 
+
+/** A card was presented to the reader. [badgeUid] is the serial number in upper-case hex; the server normalises it anyway. */
+fun badgePayload(badgeUid: String, atMs: Long): JsonObject = buildJsonObject {
+    put("badgeUid", badgeUid)
+    put("at", atMs)
+}
+
+/** An action chosen in the maintenance menu. [status] is only for `status.set`. */
+fun maintenanceActionPayload(action: String, status: String? = null): JsonObject = buildJsonObject {
+    put("action", action)
+    status?.let { put("status", it) }
+}
