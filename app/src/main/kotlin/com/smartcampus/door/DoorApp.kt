@@ -1,6 +1,10 @@
 package com.smartcampus.door
 
+import android.app.AlarmManager
 import android.app.Application
+import android.app.PendingIntent
+import android.content.Intent
+import android.os.Process
 import com.smartcampus.door.core.DoorController
 import com.smartcampus.door.core.audio.AssetDownloader
 import com.smartcampus.door.core.crypto.DeviceIdentity
@@ -34,6 +38,8 @@ sealed interface AppPhase {
     data class Enrolling(val phase: EnrollPhase, val fingerprint: String) : AppPhase
     data class Running(val controller: DoorController) : AppPhase
 }
+
+data class MaintenanceInfo(val name: String, val deviceId: String, val serverUrl: String, val fingerprint: String, val appVersion: String)
 
 /**
  * Process wide owner of the door unit: provisioning, enrollment, then the connection and controller.
@@ -109,7 +115,7 @@ class DoorApp : Application() {
         val identity: DeviceIdentity = AndroidKeystoreIdentity.loadOrCreate()
         val deviceId = checkNotNull(config.deviceId) { "an enrolled device has an id" }
         val assets = AssetDownloader(config.serverUrl, deviceId, identity, File(cacheDir, "audio"))
-        val controller = DoorController(storage, assets, MediaPlayerAudio(), scope, AudioTrackAlarm(this))
+        val controller = DoorController(storage, assets, MediaPlayerAudio(), scope, AudioTrackAlarm(this), tones = ToneGeneratorCards())
         val serverKey = parseServerKey(B64.decode(config.serverPublicKey))
         _phase.value = AppPhase.Running(controller)
 
@@ -121,6 +127,38 @@ class DoorApp : Application() {
         }
     }
 
+    /** Called from the NFC thread with the serial number of a card held to the antenna. */
+    fun onCardRead(cardUid: String) {
+        val controller = (_phase.value as? AppPhase.Running)?.controller ?: return
+        scope.launch { controller.onCardRead(cardUid) }
+    }
+
+    /** What the maintenance menu shows about this terminal. Nothing secret: no key, no session data. */
+    fun maintenanceInfo(): MaintenanceInfo {
+        val config = configStore.load()
+        val identity = runCatching { AndroidKeystoreIdentity.loadOrCreate() }.getOrNull()
+        return MaintenanceInfo(
+            name = config?.name.orEmpty(),
+            deviceId = config?.deviceId.orEmpty(),
+            serverUrl = config?.serverUrl.orEmpty(),
+            fingerprint = identity?.let { formatFingerprint(fingerprintOf(it.publicKeySpki)) }.orEmpty(),
+            appVersion = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull().orEmpty(),
+        )
+    }
+
+    /**
+     * Starts the app again from scratch. The kiosk is the home app, so Android brings it back by itself when
+     * the process dies; the alarm covers a terminal where it is not. This restarts the app, not the
+     * hardware: a real reboot needs system privileges that an ordinary app does not have.
+     */
+    fun restartApp() {
+        val launch = packageManager.getLaunchIntentForPackage(packageName)
+            ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK) ?: return
+        val pending = PendingIntent.getActivity(this, 0, launch, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_CANCEL_CURRENT)
+        (getSystemService(ALARM_SERVICE) as AlarmManager).set(AlarmManager.RTC, System.currentTimeMillis() + RESTART_DELAY_MS, pending)
+        Process.killProcess(Process.myPid())
+    }
+
     /** Forgets everything, including the key: a revoked or moved terminal enrolls again from scratch. */
     fun reset() {
         work?.cancel()
@@ -130,3 +168,5 @@ class DoorApp : Application() {
         _phase.value = AppPhase.Provisioning()
     }
 }
+
+private const val RESTART_DELAY_MS = 1_000L
