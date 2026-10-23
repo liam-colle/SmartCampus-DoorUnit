@@ -9,3 +9,4 @@ captures/
 *.jks
 CLAUDE.md
 .claude/settings.local.json
+.kotlin/
