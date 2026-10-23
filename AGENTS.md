@@ -60,6 +60,7 @@ SC_E2E_ADMIN_EMAIL=… SC_E2E_ADMIN_PASSWORD=… ./gradlew :core:test --tests '*
 
 ## Conventions
 
+- **Android 6 (API 23) is the minimum.** Do not use APIs above 23 in `app` or `core` without a fallback: `java.util.Base64` (use `B64`), `AlgorithmParameters` for EC, and similar. `java.time` is fine, it is backported at build time (core library desugaring). Test on an API 23 emulator when you touch crypto, storage, audio or the kiosk mode.
 - Kotlin official style, explicit types on public API, `val` over `var`, no `!!` outside tests unless the invariant is documented.
 - Coroutines: `suspend` for I/O, no blocking calls on the main thread, never swallow `CancellationException`.
 - UI: Compose, tokens in `ui/Theme.kt`. The door screen is read from a distance: large type, high contrast, no motion that is not meaningful. The emergency screen shows only the door code, the emblem, the title and the procedure.
